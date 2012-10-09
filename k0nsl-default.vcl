@@ -5,6 +5,9 @@ include "acl.vcl";
 # recieving sub
 sub vcl_recv {
 
+# If httpd goes down, is unavilable or too slow we serve cache 
+set req.grace = 6h;
+
 ### it's apparently wise to parse this very early
 if (req.http.Accept-Encoding) {
     if (req.url ~ "\.(jpg|jpeg|png|gif|gz|tgz|bz2|tbz|mp3|ogg|swf|mp4|flv)$") {
@@ -20,29 +23,29 @@ if (req.http.Accept-Encoding) {
     }
 }
 
-#define where "k0nsl.org"  goes
+# Define where "k0nsl.org"  goes
 if (req.http.host ~ "^(www\.)?k0nsl\.org$") {
         set req.backend = server1;
         return (lookup);
 }
 
-#Client on dedicated IP
+# Client on dedicated IP
 if (req.http.host ~ "^(www\.)?forbundet\.info$") {
         set req.backend = server2;
-        #I'm not caching it until everything is top-notch
+        # I'm not caching it until everything is top-notch
         return (pipe);
         #return (lookup);
 }
 
-#Client on shared IP
+# Client on shared IP
 if (req.http.host ~ "^(www\.)?jubbads\.com$") {
         set req.backend = server1;
-        #I'm sendind this to pipe until I come up with something better. Details later.
+        # I'm sendind this to pipe until I come up with something better. Details later.
         return (pipe);
         #return (lookup);
 }
 
-#Exclude CPanel, until I get 100% stabel VCL
+# Exclude CPanel, until I get 100% stabel VCL
 if (req.http.host ~ "^(cpanel\.)?k0nsl\.org$") {
         set req.backend = server1;
         return (pipe);
@@ -54,13 +57,13 @@ if (req.http.host ~ "^(cpanel\.)?k0nsl\.org$") {
 #return (pass);
 #}
 
-#send this to pipe (append X-Forwarded-For)
+# Send this to pipe (append X-Forwarded-For)
 if (req.request == "POST")
  {
   return(pipe);
 }
 
-# don't cache authenticated sessions
+# Don't cache authenticated sessions
 if (req.http.Cookie && req.http.Cookie ~ "(wordpress_|PHPSESSID)") {
     return(lookup);
 }
@@ -77,7 +80,7 @@ if (!(req.url ~ "wp-(login|admin)")) {
    unset req.http.cookie;
 }
 
-### do not cache these rules:
+### Do not cache these rules:
 
 if (req.request != "GET" && req.request != "HEAD") {
    return (pipe);
@@ -87,12 +90,12 @@ if (req.http.Authenticate || req.http.Authorization) {
    return (pass);
 }
 
-### don't cache authenticated sessions
+### Don't cache authenticated sessions
 if (req.http.Cookie && req.http.Cookie ~ "authtoken=") {
    return ( pipe);
 }
 
-### purge can only come from anything in ACL "purge" (defined in acl.vcl)
+### Purge can only come from anything in ACL "purge" (defined in acl.vcl)
 if (req.request == "PURGE") {
    if (!client.ip ~ purge) {
       error 405 "Not allowed.";
@@ -100,7 +103,7 @@ if (req.request == "PURGE") {
       return (lookup);
 }
 
-### if everything passes, make a lookup
+### If everything passes, make a lookup
 return (lookup);
 
 ### end of vcl_recv
@@ -108,15 +111,18 @@ return (lookup);
 
 sub vcl_fetch {
 
-# drop whatever cookies WP tries to send back to client.
+# Allow items to be stale if needed.
+set beresp.grace = 6h;
+
+# Drop whatever cookies WP tries to send back to client.
 if (!(req.url ~ "wp-(login|admin)")) {
      unset beresp.http.set-cookie;
-     ## remove http.Server header
+     # Remove http.Server header
      unset beresp.http.Server;
      set beresp.http.Server = "k0nslified (cache.k0nsl.org)/1.1b";
 }
 
-# we never wish to cache these status codes, always pass them
+# We never wish to cache these status codes, always pass them
 if (beresp.status == 404 || beresp.status == 503 || beresp.status == 500) {
     set beresp.http.X-Cacheable = "NO: beresp.status";
     set beresp.http.X-Cacheable-status = beresp.status;
@@ -134,6 +140,7 @@ sub vcl_deliver {
      return (deliver);
 }
 
+# Custom error routine. Nothing useful right now, except that status is indicated
 sub vcl_error {
     set obj.http.Content-Type = "text/html; charset=utf-8";
     if (obj.status == 404) {
@@ -164,7 +171,7 @@ sub vcl_error {
     }
 }
 
-#append X-Forwarded-For
+# Append X-Forwarded-For
 sub vcl_pipe {
   set bereq.http.Connection = "close";
   set bereq.http.X-Forwarded-For = req.http.X-Forwarded-For;
