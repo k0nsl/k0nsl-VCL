@@ -42,6 +42,13 @@ if (req.http.host ~ "^(www\.)?jubbads\.com$") {
         #return (lookup);
 }
 
+#Exclude CPanel, until I get 100% stabel VCL
+if (req.http.host ~ "^(cpanel\.)?k0nsl\.org$") {
+        set req.backend = server1;
+        return (pipe);
+        #return (lookup);
+}
+
 # always pass post / auth requests
 #if ( req.request == "POST" || req.http.Authorization ) {
 #return (pass);
