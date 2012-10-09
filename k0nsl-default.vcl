@@ -5,7 +5,7 @@ include "acl.vcl";
        	# recieving sub
        	sub vcl_recv {
 
-### parse accept encoding rulesets to normalize
+### it's apparently wise to parse this very early
         if (req.http.Accept-Encoding) {
                 if (req.url ~ "\.(jpg|jpeg|png|gif|gz|tgz|bz2|tbz|mp3|ogg|swf|mp4|flv)$") {
                         # don'tcompress already compressed files
@@ -20,7 +20,7 @@ include "acl.vcl";
                 }
         }
 
-#Define where my blog goes
+#define where "k0nsl.org"  goes
 if (req.http.host ~ "^(www\.)?k0nsl\.org$") {
         set req.backend = server1;
         return (lookup);
@@ -29,7 +29,7 @@ if (req.http.host ~ "^(www\.)?k0nsl\.org$") {
 #Client on dedicated IP
 if (req.http.host ~ "^(www\.)?forbundet\.info$") {
         set req.backend = server2;
-        #I'm not caching it until everything is top-notch (send to pipe instead of pass)
+        #I'm not caching it until everything is top-notch
         return (pipe);
         #return (lookup);
 }
@@ -37,12 +37,12 @@ if (req.http.host ~ "^(www\.)?forbundet\.info$") {
 #Client on shared IP
 if (req.http.host ~ "^(www\.)?jubbads\.com$") {
         set req.backend = server1;
-        #I'm not caching this either until all is working 100%
+        #I'm sendind this to pipe until I come up with something better. Details later.
         return (pipe);
         #return (lookup);
 }
 
-# always pass through posted requests and those with basic auth
+# always pass post / auth requests
 #if ( req.request == "POST" || req.http.Authorization ) {
 #return (pass);
 #}
@@ -81,7 +81,7 @@ if (req.http.host ~ "^(www\.)?jubbads\.com$") {
                 return ( pipe);
         }
 
-### if there is a purge make sure its coming from anything in ACL "purge"
+### purge can only come from anything in ACL "purge" (defined in acl.vcl)
 
 	if (req.request == "PURGE") {
 	    if (!client.ip ~ purge) {
@@ -90,22 +90,22 @@ if (req.http.host ~ "^(www\.)?jubbads\.com$") {
                 return (lookup);
         }
 
-### if it passes all these tests, do a lookup anyway;
+### if everything passes, make a lookup
         return (lookup);
 
 ### end of vcl_recv
        	}
 
-       	# Drop any cookies Wordpress tries to send back to the client.
+       	# drop whatever cookies WP tries to send back to client.
        	sub vcl_fetch {
                	if (!(req.url ~ "wp-(login|admin)")) {
                        	unset beresp.http.set-cookie;
-                        ## Remove the http.Server header
+                        ## remove http.Server header
                         unset beresp.http.Server;
                         set beresp.http.Server = "k0nslified (cache.k0nsl.org)/1.1b";
                	}
 
-    # These status codes should always pass through and never cache.
+    # we never wish to cache these status codes, always pass them
     if (beresp.status == 404 || beresp.status == 503 || beresp.status == 500) {
         set beresp.http.X-Cacheable = "NO: beresp.status";
         set beresp.http.X-Cacheable-status = beresp.status;
@@ -152,11 +152,11 @@ sub vcl_error {
 
 #sub vcl_pipe {
   # http://www.varnish-cache.org/ticket/451
-  # This forces every pipe request to be the first one.
+  # this forces every pipe request to be the first one.
 #  set bereq.http.connection = "close";
 #}
 
-#Append X-Forwarded-For
+#append X-Forwarded-For
 sub vcl_pipe {
   set bereq.http.Connection = "close";
   set bereq.http.X-Forwarded-For = req.http.X-Forwarded-For;
