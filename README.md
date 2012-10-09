@@ -1,4 +1,10 @@
-This contains my customized Varnish VCLs. Feel free to use them.
-
-Faithfully,
--k0nsl
+ _     ___            _ 
+| |   / _ \          | |
+| | _| | | |_ __  ___| |
+| |/ / | | | '_ \/ __| |
+|   <| |_| | | | \__ \ |
+|_|\_\\___/|_| |_|___/_|
+                        
+########################################################################
+# This contains my customized Varnish VCLs. Feel free to use them.     #
+########################################################################
