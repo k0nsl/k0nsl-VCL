@@ -175,3 +175,10 @@ sub vcl_hit {
     error 200 "Purged.";
   }
 }
+
+sub vcl_miss {
+  if (req.request == "PURGE") {
+    purge;
+    error 200 "Purged.";
+  }
+}
