@@ -8,6 +8,11 @@ sub vcl_recv {
 # If httpd goes down, is unavilable or too slow we serve cache 
 set req.grace = 6h;
 
+# Should all backends go down we can fallback and serve anonymized pages
+if (!req.backend.healthy) {
+    unset req.http.Cookie;
+}
+
 ### it's apparently wise to parse this very early
 if (req.http.Accept-Encoding) {
     if (req.url ~ "\.(jpg|jpeg|png|gif|gz|tgz|bz2|tbz|mp3|ogg|swf|mp4|flv)$") {
