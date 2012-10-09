@@ -157,12 +157,6 @@ sub vcl_error {
     }
 }
 
-#sub vcl_pipe {
-  # http://www.varnish-cache.org/ticket/451
-  # this forces every pipe request to be the first one.
-#  set bereq.http.connection = "close";
-#}
-
 #append X-Forwarded-For
 sub vcl_pipe {
   set bereq.http.Connection = "close";
@@ -173,4 +167,11 @@ sub vcl_pipe {
     set bereq.http.X-Forwarded-For = client.ip;
   }
   return (pipe);
+}
+
+sub vcl_hit {
+  if (req.request == "PURGE") {
+    purge;
+    error 200 "Purged.";
+  }
 }
