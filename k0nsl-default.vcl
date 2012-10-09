@@ -2,23 +2,23 @@
 include "backends.vcl";
 include "acl.vcl";
 
-       	# recieving sub
-       	sub vcl_recv {
+# recieving sub
+sub vcl_recv {
 
 ### it's apparently wise to parse this very early
-        if (req.http.Accept-Encoding) {
-                if (req.url ~ "\.(jpg|jpeg|png|gif|gz|tgz|bz2|tbz|mp3|ogg|swf|mp4|flv)$") {
-                        # don'tcompress already compressed files
-                        remove req.http.Accept-Encoding;
-                } elsif (req.http.Accept-Encoding ~ "gzip") {
-                        set req.http.Accept-Encoding = "gzip";
-                } elsif (req.http.Accept-Encoding ~ "deflate") {
-                        set req.http.Accept-Encoding = "deflate";
-                } else {
-                        # unkown algorithm
-                        remove req.http.Accept-Encoding;
-                }
-        }
+if (req.http.Accept-Encoding) {
+    if (req.url ~ "\.(jpg|jpeg|png|gif|gz|tgz|bz2|tbz|mp3|ogg|swf|mp4|flv)$") {
+            # don't compress already compressed files
+            remove req.http.Accept-Encoding;
+    } elsif (req.http.Accept-Encoding ~ "gzip") {
+            set req.http.Accept-Encoding = "gzip";
+    } elsif (req.http.Accept-Encoding ~ "deflate") {
+            set req.http.Accept-Encoding = "deflate";
+    } else {
+           # unkown algorithm
+           remove req.http.Accept-Encoding;
+    }
+}
 
 #define where "k0nsl.org"  goes
 if (req.http.host ~ "^(www\.)?k0nsl\.org$") {
@@ -53,78 +53,85 @@ if (req.http.host ~ "^(cpanel\.)?k0nsl\.org$") {
 #if ( req.request == "POST" || req.http.Authorization ) {
 #return (pass);
 #}
-  #send this to pipe (append X-Forwarded-For)
-  if (req.request == "POST")
-  {
-    return(pipe);
-  }
 
-    # don't cache authenticated sessions
-    if (req.http.Cookie && req.http.Cookie ~ "(wordpress_|PHPSESSID)") {
-        return(lookup);
-    }
+#send this to pipe (append X-Forwarded-For)
+if (req.request == "POST")
+ {
+  return(pipe);
+}
 
-  # CloudFlare
-  remove req.http.X-Forwarded-For;
-  if (req.http.CF-Connecting-IP) {
+# don't cache authenticated sessions
+if (req.http.Cookie && req.http.Cookie ~ "(wordpress_|PHPSESSID)") {
+    return(lookup);
+}
+
+# CloudFlare
+remove req.http.X-Forwarded-For;
+if (req.http.CF-Connecting-IP) {
     set req.http.X-Forwarded-For = req.http.CF-Connecting-IP;
-  } else {
+} else {
     set req.http.X-Forwarded-For = client.ip;
-  }
-               	if (!(req.url ~ "wp-(login|admin)")) {
-                       	unset req.http.cookie;
-               	}
+}
+
+if (!(req.url ~ "wp-(login|admin)")) {
+   unset req.http.cookie;
+}
+
 ### do not cache these rules:
 
-        if (req.request != "GET" && req.request != "HEAD") {
-                return (pipe);
-        }
-        if (req.http.Authenticate || req.http.Authorization) {
-                return (pass);
-        }
+if (req.request != "GET" && req.request != "HEAD") {
+   return (pipe);
+}
+
+if (req.http.Authenticate || req.http.Authorization) {
+   return (pass);
+}
 
 ### don't cache authenticated sessions
-        if (req.http.Cookie && req.http.Cookie ~ "authtoken=") {
-                return ( pipe);
-        }
+if (req.http.Cookie && req.http.Cookie ~ "authtoken=") {
+   return ( pipe);
+}
 
 ### purge can only come from anything in ACL "purge" (defined in acl.vcl)
-
-	if (req.request == "PURGE") {
-	    if (!client.ip ~ purge) {
-                error 405 "Not allowed.";
-                }
-                return (lookup);
-        }
+if (req.request == "PURGE") {
+   if (!client.ip ~ purge) {
+      error 405 "Not allowed.";
+      }
+      return (lookup);
+}
 
 ### if everything passes, make a lookup
-        return (lookup);
+return (lookup);
 
 ### end of vcl_recv
-       	}
+}
 
-       	# drop whatever cookies WP tries to send back to client.
-       	sub vcl_fetch {
-               	if (!(req.url ~ "wp-(login|admin)")) {
-                       	unset beresp.http.set-cookie;
-                        ## remove http.Server header
-                        unset beresp.http.Server;
-                        set beresp.http.Server = "k0nslified (cache.k0nsl.org)/1.1b";
-               	}
+sub vcl_fetch {
 
-    # we never wish to cache these status codes, always pass them
-    if (beresp.status == 404 || beresp.status == 503 || beresp.status == 500) {
-        set beresp.http.X-Cacheable = "NO: beresp.status";
-        set beresp.http.X-Cacheable-status = beresp.status;
-        return (hit_for_pass);
-     }
-       	}
+# drop whatever cookies WP tries to send back to client.
+if (!(req.url ~ "wp-(login|admin)")) {
+     unset beresp.http.set-cookie;
+     ## remove http.Server header
+     unset beresp.http.Server;
+     set beresp.http.Server = "k0nslified (cache.k0nsl.org)/1.1b";
+}
+
+# we never wish to cache these status codes, always pass them
+if (beresp.status == 404 || beresp.status == 503 || beresp.status == 500) {
+    set beresp.http.X-Cacheable = "NO: beresp.status";
+    set beresp.http.X-Cacheable-status = beresp.status;
+    return (hit_for_pass);
+}
+
+### end vcl_fetch
+}
 
 sub vcl_deliver {
-        remove resp.http.X-Varnish;
-        remove resp.http.Via;
-        remove resp.http.Age;
-    return (deliver);
+
+     remove resp.http.X-Varnish;
+     remove resp.http.Via;
+     remove resp.http.Age;
+     return (deliver);
 }
 
 sub vcl_error {
